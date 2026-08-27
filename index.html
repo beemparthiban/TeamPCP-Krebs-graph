@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Unmasking the TeamPCP Leader: The Investigation Board</title>
+<script src="https://artifactcdn.diabrowser.engineering/ajax/libs/d3/d3.min.js"></script>
+<style>
+  :root{
+    --paper:#ece2cb;
+    --paper2:#e4d8bc;
+    --ink:#2b2318;
+    --muted:#6f6248;
+    --string:#b5372b;
+    --string-dim:rgba(181,55,43,.18);
+    --gold:#b8892b;
+    --card:#fbf7ec;
+    --shadow:rgba(60,45,20,.28);
+    --c-anchor:#a3242a;
+    --c-person:#1f6f6b;
+    --c-handle:#c46a1c;
+    --c-email:#2f5aa8;
+    --c-infra:#4b7a35;
+    --c-company:#6b4a9c;
+    --c-group:#3d3327;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:var(--paper);color:var(--ink);
+    font-family:Georgia,"Iowan Old Style","Times New Roman",serif;
+    -webkit-font-smoothing:antialiased;}
+  body{
+    background-image:
+      radial-gradient(circle at 20% 15%, rgba(255,255,255,.35), transparent 45%),
+      radial-gradient(circle at 80% 85%, rgba(120,95,50,.10), transparent 50%),
+      repeating-linear-gradient(0deg, rgba(120,95,50,.028) 0 2px, transparent 2px 4px);
+  }
+  .wrap{max-width:1280px;margin:0 auto;padding:26px 22px 70px;}
+  header.masthead{border-bottom:3px double #7a6a45;padding-bottom:14px;margin-bottom:16px;}
+  .kicker{font-family:"Courier New",monospace;font-size:12px;letter-spacing:.22em;
+    text-transform:uppercase;color:var(--string);font-weight:700;}
+  h1{font-size:clamp(26px,4vw,42px);line-height:1.04;margin:8px 0 6px;letter-spacing:-.5px;}
+  .dek{font-size:15px;color:var(--muted);max-width:760px;line-height:1.5;margin:0;}
+  .dek b{color:var(--ink);}
+
+  /* Trail ribbon */
+  .trail{margin:20px 0 8px;}
+  .trail h2, .board h2{font-family:"Courier New",monospace;font-size:12px;letter-spacing:.2em;
+    text-transform:uppercase;color:var(--muted);margin:0 0 10px;font-weight:700;}
+  .steps{display:flex;gap:0;flex-wrap:wrap;align-items:stretch;}
+  .step{flex:1 1 150px;min-width:150px;position:relative;padding:12px 14px 14px;background:var(--card);
+    border:1px solid #d8cbaa;border-radius:4px;box-shadow:2px 3px 0 var(--string-dim);margin:0 8px 10px 0;}
+  .step .n{position:absolute;top:-11px;left:-11px;width:26px;height:26px;border-radius:50%;
+    background:var(--string);color:#fff;font-family:"Courier New",monospace;font-weight:700;
+    font-size:13px;display:flex;align-items:center;justify-content:center;box-shadow:1px 1px 0 var(--shadow);}
+  .step .t{font-weight:700;font-size:13.5px;margin-bottom:3px;line-height:1.2;}
+  .step .d{font-size:12px;color:var(--muted);line-height:1.4;}
+  .step .src{font-family:"Courier New",monospace;font-size:10.5px;color:var(--string);margin-top:5px;
+    text-transform:uppercase;letter-spacing:.04em;}
+
+  /* Controls */
+  .toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:14px 0 8px;}
+  button.ctrl{font-family:"Courier New",monospace;font-size:12px;letter-spacing:.03em;
+    background:var(--card);border:1px solid #b9a877;color:var(--ink);padding:7px 13px;border-radius:3px;
+    cursor:pointer;font-weight:700;box-shadow:1px 2px 0 var(--string-dim);transition:.15s;}
+  button.ctrl:hover{background:#fff;transform:translateY(-1px);}
+  button.ctrl.active{background:var(--string);color:#fff;border-color:var(--string);}
+  .legend{display:flex;flex-wrap:wrap;gap:6px 14px;margin:6px 0 4px;align-items:center;}
+  .lg{display:inline-flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;user-select:none;
+    padding:2px 4px;border-radius:3px;font-weight:600;}
+  .lg .sw{width:13px;height:13px;border-radius:3px;border:1.5px solid rgba(0,0,0,.2);}
+  .lg.off{opacity:.35;}
+  .hint{font-size:12px;color:var(--muted);font-style:italic;margin-left:auto;}
+
+  /* Board / graph */
+  .board{margin-top:6px;}
+  .stage-wrap{position:relative;width:100%;height:clamp(600px,80vh,940px);
+    background:
+      radial-gradient(circle at 30% 20%, rgba(255,255,255,.4), transparent 55%),
+      linear-gradient(160deg,#ddcfa8,#cdbc90);
+    border:10px solid #6b4f2a;border-radius:6px;overflow:hidden;
+    box-shadow:inset 0 0 40px rgba(70,50,20,.35), 0 10px 30px rgba(50,35,10,.25);
+    cursor:grab;}
+  .stage-wrap.grabbing{cursor:grabbing;}
+  svg{display:block;width:100%;height:100%;touch-action:none;}
+
+  .link{fill:none;stroke:var(--string);stroke-opacity:.34;stroke-width:1.6px;transition:stroke-opacity .2s,stroke-width .2s;}
+  .link.spine{stroke-opacity:.6;stroke-width:2.4px;}
+  .link.active{stroke-opacity:.95;stroke-width:2.8px;}
+  .link.dim{stroke-opacity:.06;}
+  .linkLabel{font-family:"Courier New",monospace;font-size:9.5px;fill:#5b3a12;opacity:0;
+    paint-order:stroke;stroke:rgba(251,247,236,.9);stroke-width:3px;transition:opacity .2s;pointer-events:none;}
+  .linkLabel.show{opacity:1;}
+
+  .node{cursor:pointer;}
+  .node .cardbg{fill:var(--card);stroke:#cdbf9c;stroke-width:1px;
+    filter:drop-shadow(2px 3px 2px rgba(60,45,20,.32));}
+  .node .accent{}
+  .node .pin{stroke:rgba(0,0,0,.25);stroke-width:1px;}
+  .node .pinhi{fill:rgba(255,255,255,.6);}
+  .node .title{font-size:12.5px;font-weight:700;fill:var(--ink);}
+  .node .sub{font-family:"Courier New",monospace;font-size:9.5px;fill:var(--muted);}
+  .node.anchor .cardbg{fill:#fff5ec;stroke:var(--c-anchor);stroke-width:2.5px;
+    filter:drop-shadow(3px 4px 3px rgba(120,20,20,.35));}
+  .node.anchor .title{fill:var(--c-anchor);font-size:14.5px;}
+  .node.dim{opacity:.16;}
+  .node.hi .cardbg{stroke-width:2.6px;}
+
+  .tooltip{position:absolute;pointer-events:none;max-width:270px;background:#1f1a11;color:#f3ecda;
+    padding:9px 11px;border-radius:5px;font-size:12px;line-height:1.42;
+    box-shadow:0 6px 18px rgba(0,0,0,.4);opacity:0;transition:opacity .12s;z-index:5;
+    border:1px solid #4a3d22;}
+  .tooltip .tt-t{font-weight:700;font-size:12.5px;margin-bottom:3px;display:block;}
+  .tooltip .tt-tag{font-family:"Courier New",monospace;font-size:9.5px;text-transform:uppercase;
+    letter-spacing:.08em;color:#e0a94a;display:block;margin-bottom:4px;}
+  .footnote{font-size:11.5px;color:var(--muted);margin-top:12px;line-height:1.5;}
+  .footnote a{color:var(--string);}
+  @media (max-width:640px){ .hint{display:none;} }
+  @media print{
+    .toolbar,.hint{display:none;}
+    .stage-wrap{height:680px;border-color:#999;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="masthead">
+    <h1>Unmasking the TeamPCP Leader</h1>
+    <p class="dek">How <b>KrebsOnSecurity</b> KrebsOnSecurity Investigation </p>
+  </header>
+
+  <section class="trail">
+    <h2>◍ How the trail started &nbsp;— the seven pivots</h2>
+    <div class="steps" id="steps"></div>
+  </section>
+
+  <section class="board">
+    <div class="toolbar">
+      <button class="ctrl" id="btnTrace">▶ Trace the trail</button>
+      <button class="ctrl" id="btnLabels">Show all evidence</button>
+      <button class="ctrl" id="btnReset">Reset board</button>
+      <span class="hint">drag cards · scroll to zoom · click a card to isolate its links</span>
+    </div>
+    <div class="legend" id="legend"></div>
+    <div class="stage-wrap" id="stage">
+      <svg id="svg"></svg>
+      <div class="tooltip" id="tip"></div>
+    </div>
+    <p class="footnote">Reconstructed entirely from Brian Krebs' reporting, <i>“Two Alleged ‘TeamPCP’ Hackers Arrested in Australia”</i> (KrebsOnSecurity, Aug 27 2026). Investigative sources named on the strings: SpyCloud, DomainTools, Constella Intelligence, Intel 471, Epieos, Flashpoint, Pipl, HackerOne and Australia's ASIC business registry.</p>
+  </section>
+</div>
+
+<script>
+// ---------- DATA ----------
+const TYPES = {
+  anchor:{label:"Real person (target)", color:"var(--c-anchor)"},
+  person:{label:"Named person", color:"var(--c-person)"},
+  handle:{label:"Cybercrime handle / alias", color:"var(--c-handle)"},
+  email:{label:"Email account", color:"var(--c-email)"},
+  infra:{label:"IP / domain / host", color:"var(--c-infra)"},
+  company:{label:"Registered company", color:"var(--c-company)"},
+  group:{label:"Cybercrime group", color:"var(--c-group)"}
+};
+
+const nodes = [
+  {id:"express", t:"Express", s:"Breachforums", type:"handle", d:"TeamPCP leader's Breachforums alias. Intel 471 found it was registered with shitstickpp@gmail.com and posted from four South African IPs."},
+  {id:"shitstickpp", t:"shitstickpp@gmail.com", s:"pivot email", type:"email", d:"The email that bridges the crime persona 'Express' to the 2022 'ChristmasSnow' account."},
+  {id:"christmassnow", t:"ChristmasSnow", s:"Raidforums · 2022", type:"handle", d:"Registered with shitstickpp@gmail.com. SpyCloud: nearly all logins came from ISPs in Perth, Australia — the first geographic clue."},
+  {id:"ip211", t:"211.27.196.111", s:"Perth IP", type:"infra", d:"One of the Perth login IPs. In DomainTools passive DNS it had served for years as a private file server for a Perth family named Thomson."},
+  {id:"qnap", t:"joshuawthomson39.myqnapcloud.com", s:"QNAP host", type:"infra", d:"A storage device persisting at 211.27.196.111 from 2022–2025, alongside 'ithomson' and 'kthomson0061' hosts. The name gives up 'Joshua Thomson'."},
+  {id:"josh", t:"Joshua Thomson", s:"the brother", type:"person", d:"Constella search for 'joshuathomson39' → a kwe.com freight account in Perth. Josh himself has little tie to cybercrime — but he has a brother."},
+  {id:"ruben", t:"Ruben Thomson", s:"aka “Ellis” — the target", type:"anchor", d:"The real person behind the TeamPCP leader. 21, of Cottesloe (Perth). Web developer; family originally from Pietermaritzburg, South Africa."},
+  {id:"ian", t:"Ian Thomson", s:"the father", type:"person", d:"Dentist in Cottesloe; graduated Wits University, Johannesburg. DomainTools ties him to thomson.org.au, securecomputing.au and thomsonfamily.net.au."},
+  {id:"thomsondom", t:"thomson.org.au / securecomputing.au", s:"family domains", type:"infra", d:"Domains registered under Ian Thomson, later reused by Ruben."},
+  {id:"rubenmail", t:"ruben@thomson.org.au", s:"", type:"email", d:"Constella: this account reused the password 'joshuathomson1' — a password shared by only a handful of accounts."},
+  {id:"yolomail", t:"yolosolo17@gmail.com", s:"", type:"email", d:"Shared the 'joshuathomson1' password with ruben@thomson.org.au."},
+  {id:"surfinup8", t:"surfinup8@gmail.com", s:"", type:"email", d:"Shared the same password. Intel 471: it registered 'Yolosolo17' on Altenen (2018) from Perth IP 110.141.230.15. DomainTools: registrant of rubenthomson.com."},
+  {id:"yolosolo17", t:"Yolosolo17", s:"Altenen · 2018", type:"handle", d:"Advertised free web proxies and the domain rubenthomson.com, once used to sell steeply discounted iPhones."},
+  {id:"rubensite", t:"rubenthomson.com", s:"", type:"infra", d:"Hosted at 110.141.230.15 and registered to surfinup8@gmail.com."},
+  {id:"ip110", t:"110.141.230.15", s:"Perth IP", type:"infra", d:"SpyCloud: shared by sheepstealing@gmail.com, surfinup8, ian@thomsonfamily.net.au, jasper@yakuza.cc and rubenthomson1@gmail.com."},
+  {id:"sheep", t:"sheepstealing@gmail.com", s:"hub email", type:"email", d:"A hub account. SpyCloud & Intel 471 tie it to a string of forum aliases and to Ruben's real online life."},
+  {id:"sheepalias", t:"Sheep420 · YoloSolo117 · Yakuza.cc", s:"· DingoFlour · Sheepx", type:"handle", d:"Cross-forum aliases on Raidforums, Hackforums, Breachforums and Altenen, all tied to sheepstealing@gmail.com."},
+  {id:"securemail", t:"ruben@securecomputing.au", s:"", type:"email", d:"Epieos: tied to an Airbnb account — “Hey, I'm Ruben, my friends call me Ellis.”"},
+  {id:"xmassnow", t:"XmasSnow / XmasSnowisBack", s:"GitHub", type:"handle", d:"Epieos: a GitHub account tied to sheepstealing and a Microsoft account for Ruben Thomson. Scammed forum users in 2022 — echoing 'ChristmasSnow'."},
+  {id:"gonefishing", t:"“Gone Fishing”", s:"Twitter/X · 2026", type:"handle", d:"Registered by sheepstealing@gmail.com, lists South Africa. But the same Gmail's Google Maps reviews all sit in Western Australia."},
+  {id:"opsec", t:"OPSEC Express", s:"+ Tensor Industries, Secure Computing Solutions", type:"company", d:"ASIC registry: companies Ruben Thomson incorporated since 2024. 'Express' was BulkDMT's Breachforums nickname — an opsec self-own."},
+  {id:"deadcat", t:"Deadcatx3", s:"HackerOne", type:"handle", d:"In June 2025 a 'Ruben Thomson' registered on HackerOne as Deadcatx3 — an alias multiple firms attribute to TeamPCP."},
+  {id:"pcpcats", t:"@pcpcats / “T”", s:"spokesperson (arrested)", type:"handle", d:"Self-described TeamPCP spokesperson; Cybercats admin 'T'; from Western Australia. The persona Krebs interviewed as 'Ellis'."},
+  {id:"ellisd25", t:"EllisD25 / LSD", s:"Darkforums", type:"handle", d:"Leader alias linked to Express & BulkDMT via a shared Tox / Session ID."},
+  {id:"bulkdmt", t:"BulkDMT / DMT Host", s:"Breachstars", type:"handle", d:"Also ran the 'DMT Host' VPS service. Linked to Express and EllisD25 by a shared Tox / Session ID."},
+  {id:"persy", t:"Persy_PCP", s:"Telegram", type:"handle", d:"Flashpoint recorded a year of messages: split life 'between two countries', complained his 'whole country is racist' — pointing back to South Africa."},
+  {id:"teampcp", t:"TeamPCP", s:"the group", type:"group", d:"Supply-chain extortion collective behind the Shai-Hulud worm and the LiteLLM & GitHub compromises."},
+  {id:"cybercats", t:"Cybercats", s:"Matrix server", type:"group", d:"Element/Matrix chat linking several crews. @kernelstub tweeted the public invite link that exposed the roster."},
+  {id:"kernelstub", t:"@kernelstub", s:"George Prepakis", type:"person", d:"Security researcher and 'center of gravity'. Created the Cybercats server and used his real X name as his handle."},
+  {id:"boxturtle", t:"“Boxturtle” / @xpl0itrsturtle", s:"", type:"handle", d:"Cybercats admin and data-breach broker, selling data from BMW, Audi, Honda, Toyota, Snapchat and others."},
+  {id:"seesaw", t:"SeesawSec / Fulcrumsec", s:"", type:"handle", d:"Cybercats admin behind extortion hits on Novo Nordisk, LexisNexis and Avnet."},
+  {id:"casper", t:"@pcpcasper", s:"2nd man arrested", type:"person", d:"Cybercats admin and National Socialist Network member in Western Australia — named by a source as the other suspect arrested."}
+];
+
+const links = [
+  {s:"express", t:"shitstickpp", l:"Intel 471: reg. email", spine:1},
+  {s:"shitstickpp", t:"christmassnow", l:"SpyCloud: registered 2022", spine:1},
+  {s:"christmassnow", t:"ip211", l:"SpyCloud: Perth login IPs", spine:1},
+  {s:"ip211", t:"qnap", l:"DomainTools passive DNS", spine:1},
+  {s:"qnap", t:"josh", l:"host = Joshua Thomson", spine:1},
+  {s:"josh", t:"ruben", l:"Facebook family: brother", spine:1},
+  {s:"josh", t:"ian", l:"Facebook: father"},
+  {s:"ian", t:"thomsondom", l:"DomainTools: registrant"},
+  {s:"ruben", t:"thomsondom", l:"reuses family domains"},
+  {s:"ruben", t:"rubenmail", l:"family email"},
+  {s:"rubenmail", t:"yolomail", l:"Constella: shared password"},
+  {s:"rubenmail", t:"surfinup8", l:"Constella: pw 'joshuathomson1'"},
+  {s:"surfinup8", t:"yolosolo17", l:"Intel 471: Altenen 2018"},
+  {s:"yolosolo17", t:"rubensite", l:"advertised domain"},
+  {s:"surfinup8", t:"rubensite", l:"DomainTools: registrant"},
+  {s:"rubensite", t:"ip110", l:"hosted at"},
+  {s:"surfinup8", t:"ip110", l:"SpyCloud: Altenen IP"},
+  {s:"ip110", t:"sheep", l:"SpyCloud: shared IP"},
+  {s:"sheep", t:"sheepalias", l:"SpyCloud / Intel 471"},
+  {s:"sheep", t:"xmassnow", l:"Epieos: GitHub + Microsoft"},
+  {s:"sheep", t:"gonefishing", l:"Epieos: Twitter 2026"},
+  {s:"xmassnow", t:"christmassnow", l:"same 'Snow' scam", dashed:1},
+  {s:"ruben", t:"securemail", l:"email"},
+  {s:"securemail", t:"ruben", l:"Epieos: Airbnb 'call me Ellis'"},
+  {s:"ruben", t:"opsec", l:"ASIC business registry"},
+  {s:"opsec", t:"express", l:"'Express' = BulkDMT alias", dashed:1},
+  {s:"ruben", t:"deadcat", l:"HackerOne: reg. as Ruben Thomson", spine:1},
+  {s:"deadcat", t:"teampcp", l:"alias flagged as TeamPCP", spine:1},
+  {s:"pcpcats", t:"ruben", l:"= Ellis (real identity)", spine:1, key:1},
+  {s:"pcpcats", t:"ellisd25", l:"same Tox / Session ID"},
+  {s:"pcpcats", t:"bulkdmt", l:"same Tox / Session ID"},
+  {s:"pcpcats", t:"express", l:"same Tox / Session ID"},
+  {s:"bulkdmt", t:"express", l:"DMT Host / same vendor"},
+  {s:"persy", t:"pcpcats", l:"Flashpoint: leader's Telegram"},
+  {s:"pcpcats", t:"teampcp", l:"self-described spokesperson"},
+  {s:"pcpcats", t:"cybercats", l:"Cybercats admin 'T'"},
+  {s:"kernelstub", t:"cybercats", l:"created server"},
+  {s:"boxturtle", t:"cybercats", l:"admin"},
+  {s:"seesaw", t:"cybercats", l:"admin"},
+  {s:"casper", t:"cybercats", l:"admin"},
+  {s:"casper", t:"teampcp", l:"close associate (2nd arrest)"}
+];
+
+const steps = [
+  {t:"A 2022 registration", d:"SpyCloud ties shitstickpp@gmail.com to a Raidforums account, ‘ChristmasSnow’.", src:"SpyCloud"},
+  {t:"A Perth fingerprint", d:"Nearly all logins to that account came from ISPs in Perth, Australia.", src:"SpyCloud"},
+  {t:"A family file server", d:"A Perth IP had for years hosted a private server for a family named Thomson.", src:"DomainTools pDNS"},
+  {t:"A name in a hostname", d:"‘joshuawthomson39.myqnapcloud.com’ surrenders the name Joshua Thomson.", src:"DomainTools"},
+  {t:"The wrong brother", d:"Josh checks out clean — but his brother Ruben has forum history back to 2018.", src:"Constella / Epieos"},
+  {t:"A reused password", d:"‘joshuathomson1’ links Ruben's email to a chain of crime-forum accounts.", src:"Constella / Intel 471"},
+  {t:"The opsec self-owns", d:"A company named ‘OPSEC Express’ and a HackerOne handle ‘Deadcatx3’ seal it.", src:"ASIC / HackerOne"}
+];
+
+// ---------- BUILD TRAIL ----------
+const stepBox = document.getElementById('steps');
+steps.forEach((s,i)=>{
+  const el=document.createElement('div');el.className='step';
+  el.innerHTML=`<div class="n">${i+1}</div><div class="t">${s.t}</div><div class="d">${s.d}</div><div class="src">▸ ${s.src}</div>`;
+  stepBox.appendChild(el);
+});
+
+// ---------- LEGEND ----------
+const legend=document.getElementById('legend');
+const typeState={};
+Object.keys(TYPES).forEach(k=>{
+  typeState[k]=true;
+  const el=document.createElement('span');el.className='lg';el.dataset.k=k;
+  el.innerHTML=`<span class="sw" style="background:${TYPES[k].color}"></span>${TYPES[k].label}`;
+  el.addEventListener('click',()=>{typeState[k]=!typeState[k];el.classList.toggle('off',!typeState[k]);applyTypeFilter();});
+  legend.appendChild(el);
+});
+
+// ---------- GRAPH SETUP ----------
+const stage=document.getElementById('stage');
+const svg=d3.select('#svg');
+const tip=document.getElementById('tip');
+let W=stage.clientWidth, H=stage.clientHeight;
+
+const root=svg.append('g');
+const gLinks=root.append('g');
+const gLabels=root.append('g');
+const gNodes=root.append('g');
+
+// measure card size
+const charW=6.9, subW=5.6, padX=14, cardH=42;
+nodes.forEach(n=>{
+  const w=Math.max(n.t.length*charW, (n.s||'').length*subW)+padX*2;
+  n.w=Math.min(Math.max(w,86),230);
+  n.h=cardH; n.r=n.w/2+16;
+});
+
+const idMap=new Map(nodes.map(n=>[n.id,n]));
+links.forEach(l=>{l.source=l.s;l.target=l.t;});
+// adjacency
+const adj=new Map(nodes.map(n=>[n.id,new Set()]));
+links.forEach(l=>{adj.get(l.s).add(l.t);adj.get(l.t).add(l.s);});
+
+const sim=d3.forceSimulation(nodes)
+  .force('link',d3.forceLink(links).id(d=>d.id).distance(l=>l.key?120:105).strength(.55))
+  .force('charge',d3.forceManyBody().strength(-950))
+  .force('collide',d3.forceCollide().radius(d=>d.r).strength(.9))
+  .force('center',d3.forceCenter(W/2,H/2))
+  .force('x',d3.forceX(W/2).strength(.05))
+  .force('y',d3.forceY(H/2).strength(.06));
+
+// pull anchor toward centre
+idMap.get('ruben').fx=null;
+sim.force('anchorX',d3.forceX(d=>d.id==='ruben'?W/2:null).strength(d=>d.id==='ruben'?.12:0));
+sim.force('anchorY',d3.forceY(d=>d.id==='ruben'?H*0.5:null).strength(d=>d.id==='ruben'?.12:0));
+
+// links
+const linkSel=gLinks.selectAll('path').data(links).join('path')
+  .attr('class',l=>'link'+(l.spine?' spine':'')+(l.key?' keyline':''))
+  .attr('stroke-dasharray',l=>l.dashed?'5 4':null);
+
+const labelSel=gLabels.selectAll('text').data(links).join('text')
+  .attr('class','linkLabel').attr('text-anchor','middle').text(l=>l.l);
+
+// nodes
+const nodeSel=gNodes.selectAll('g').data(nodes).join('g')
+  .attr('class',d=>'node '+(d.type==='anchor'?'anchor':''))
+  .call(d3.drag()
+    .on('start',(e,d)=>{if(!e.active)sim.alphaTarget(.25).restart();d.fx=d.x;d.fy=d.y;})
+    .on('drag',(e,d)=>{d.fx=e.x;d.fy=e.y;})
+    .on('end',(e,d)=>{if(!e.active)sim.alphaTarget(0);d.fx=null;d.fy=null;}));
+
+nodeSel.append('rect').attr('class','cardbg')
+  .attr('width',d=>d.w).attr('height',d=>d.h).attr('x',d=>-d.w/2).attr('y',-cardH/2)
+  .attr('rx',5);
+// left accent bar by type
+nodeSel.append('rect').attr('class','accent')
+  .attr('width',5).attr('height',d=>d.h).attr('x',d=>-d.w/2).attr('y',-cardH/2)
+  .attr('rx',2).attr('fill',d=>TYPES[d.type].color);
+// pushpin
+nodeSel.append('circle').attr('class','pin').attr('r',5).attr('cy',-cardH/2)
+  .attr('fill',d=>d.type==='anchor'?'var(--c-anchor)':'var(--string)');
+nodeSel.append('circle').attr('class','pinhi').attr('r',1.6).attr('cx',-1.4).attr('cy',-cardH/2-1.4);
+// text
+nodeSel.append('text').attr('class','title').attr('text-anchor','middle')
+  .attr('y',d=>d.s? -2 : 4).text(d=>d.t);
+nodeSel.append('text').attr('class','sub').attr('text-anchor','middle')
+  .attr('y',12).text(d=>d.s||'');
+
+// tooltip + focus
+nodeSel.on('mousemove',(e,d)=>{
+  const r=stage.getBoundingClientRect();
+  tip.style.opacity=1;
+  tip.innerHTML=`<span class="tt-tag">${TYPES[d.type].label}</span><span class="tt-t">${d.t}${d.s?' · '+d.s:''}</span>${d.d}`;
+  let x=e.clientX-r.left+14, y=e.clientY-r.top+14;
+  if(x+280>r.width)x=e.clientX-r.left-290;
+  if(y+140>r.height)y=e.clientY-r.top-140;
+  tip.style.left=x+'px';tip.style.top=y+'px';
+})
+.on('mouseleave',()=>{tip.style.opacity=0;})
+.on('click',(e,d)=>{e.stopPropagation();focusNode(d.id);});
+
+svg.on('click',()=>clearFocus());
+
+// tick
+function tick(){
+  linkSel.attr('d',l=>{
+    const sx=l.source.x,sy=l.source.y,tx=l.target.x,ty=l.target.y;
+    const dx=tx-sx,dy=ty-sy,dr=Math.sqrt(dx*dx+dy*dy)*2.6;
+    return `M${sx},${sy}A${dr},${dr} 0 0,1 ${tx},${ty}`;
+  });
+  labelSel.attr('x',l=>(l.source.x+l.target.x)/2).attr('y',l=>(l.source.y+l.target.y)/2-4);
+  nodeSel.attr('transform',d=>`translate(${d.x},${d.y})`);
+}
+sim.on('tick',tick);
+
+// ---------- ZOOM ----------
+const zoom=d3.zoom().scaleExtent([.35,2.6]).on('zoom',e=>root.attr('transform',e.transform));
+svg.call(zoom);
+stage.addEventListener('mousedown',()=>stage.classList.add('grabbing'));
+window.addEventListener('mouseup',()=>stage.classList.remove('grabbing'));
+
+// ---------- FOCUS ----------
+let focused=null;
+function focusNode(id){
+  focused=id;
+  const keep=adj.get(id);keep.add(id);
+  nodeSel.classed('dim',d=>!keep.has(d.id)).classed('hi',d=>d.id===id);
+  linkSel.classed('dim',l=>!(l.s===id||l.t===id)).classed('active',l=>l.s===id||l.t===id);
+  labelSel.classed('show',l=>l.s===id||l.t===id);
+}
+function clearFocus(){
+  if(!focused && !allLabels)return;
+  focused=null;
+  nodeSel.classed('dim',false).classed('hi',false);
+  linkSel.classed('dim',false).classed('active',false);
+  labelSel.classed('show',allLabels);
+  applyTypeFilter();
+}
+
+// ---------- TYPE FILTER ----------
+function applyTypeFilter(){
+  nodeSel.style('display',d=>typeState[d.type]?null:'none');
+  linkSel.style('display',l=>typeState[idMap.get(l.s).type]&&typeState[idMap.get(l.t).type]?null:'none');
+  labelSel.style('display',l=>typeState[idMap.get(l.s).type]&&typeState[idMap.get(l.t).type]?null:'none');
+}
+
+// ---------- CONTROLS ----------
+let allLabels=false;
+document.getElementById('btnLabels').addEventListener('click',function(){
+  allLabels=!allLabels;this.classList.toggle('active',allLabels);
+  if(!focused)labelSel.classed('show',allLabels);
+});
+
+document.getElementById('btnReset').addEventListener('click',()=>{
+  clearFocus();
+  svg.transition().duration(600).call(zoom.transform,d3.zoomIdentity);
+  sim.alpha(.5).restart();
+});
+
+// trace the spine sequentially
+const spineOrder=["express","shitstickpp","christmassnow","ip211","qnap","josh","ruben","deadcat","teampcp","pcpcats"];
+const btnTrace=document.getElementById('btnTrace');
+let tracing=false;
+btnTrace.addEventListener('click',()=>{
+  if(tracing)return;tracing=true;btnTrace.classList.add('active');
+  // dim everything, then light up spine nodes/links one by one
+  const spineNodeSet=new Set(spineOrder);
+  const spineLinks=links.filter(l=>l.spine);
+  nodeSel.classed('dim',true);linkSel.classed('dim',true).classed('active',false);
+  labelSel.classed('show',false);
+  const lit=new Set();
+  let i=0;
+  const iv=setInterval(()=>{
+    const id=spineOrder[i];lit.add(id);
+    nodeSel.filter(d=>d.id===id).classed('dim',false).classed('hi',true);
+    linkSel.filter(l=>l.spine&&lit.has(l.s)&&lit.has(l.t))
+      .classed('dim',false).classed('active',true);
+    labelSel.filter(l=>l.spine&&lit.has(l.s)&&lit.has(l.t)).classed('show',true);
+    i++;
+    if(i>=spineOrder.length){
+      clearInterval(iv);
+      setTimeout(()=>{tracing=false;btnTrace.classList.remove('active');},400);
+    }
+  },560);
+});
+
+// ---------- RESIZE ----------
+const ro=new ResizeObserver(()=>{
+  W=stage.clientWidth;H=stage.clientHeight;
+  sim.force('center',d3.forceCenter(W/2,H/2));
+  sim.force('x',d3.forceX(W/2).strength(.05));
+  sim.force('y',d3.forceY(H/2).strength(.06));
+  sim.alpha(.3).restart();
+});
+ro.observe(stage);
+
+// settle
+sim.alpha(1).restart();
+setTimeout(()=>sim.alphaTarget(0),2500);
+</script>
+</body>
+</html>
